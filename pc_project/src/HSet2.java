@@ -8,9 +8,11 @@ public class HSet2<E> implements IHSet<E>{
 
     private LinkedList<E>[] table;
     private int size;
+
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final ReadLock r = rwl.readLock();
     private final WriteLock w = rwl.writeLock();
+    private final Condition wait_for_elem = w.newCondition();
 
     /**
      * Constructor.
@@ -20,7 +22,6 @@ public class HSet2<E> implements IHSet<E>{
         table = createTable(ht_size);
         size = 0;
     }
-
 
     // Auxiliary method to return the list where
     // an element should be stored.
@@ -40,13 +41,22 @@ public class HSet2<E> implements IHSet<E>{
 
     @Override
     public int capacity() {
+//        r.lock();
+//        try {
+//            return table.length;
+//        } finally {
+//            r.unlock();
+//        }
         return table.length;
     }
 
     @Override
     public int size() {
-        synchronized (this) {
+        r.lock();
+        try {
             return size;
+        } finally {
+            r.unlock();
         }
     }
 
@@ -55,15 +65,18 @@ public class HSet2<E> implements IHSet<E>{
         if (elem == null) {
             throw new IllegalArgumentException();
         }
-        synchronized (this) {
+        w.lock();
+        try {
             LinkedList<E> list = getEntry(elem);
             boolean r = ! list.contains(elem);
             if (r) {
                 list.addFirst(elem);
-                notifyAll(); // there may threads waiting in waitEleme
+                wait_for_elem.signalAll(); // there may threads waiting in waitElem
                 size++;
             }
             return r;
+        } finally {
+            w.unlock();
         }
     }
 
@@ -72,12 +85,15 @@ public class HSet2<E> implements IHSet<E>{
         if (elem == null) {
             throw new IllegalArgumentException();
         }
-        synchronized (this) {
+        w.lock();
+        try {
             boolean r = getEntry(elem).remove(elem);
             if (r) {
                 size--;
             }
             return r;
+        } finally {
+            w.unlock();
         }
     }
 
@@ -86,8 +102,11 @@ public class HSet2<E> implements IHSet<E>{
         if (elem == null) {
             throw new IllegalArgumentException();
         }
-        synchronized (this) {
+        r.lock();
+        try {
             return getEntry(elem).contains(elem);
+        } finally {
+            r.unlock();
         }
     }
 
@@ -96,21 +115,25 @@ public class HSet2<E> implements IHSet<E>{
         if (elem == null) {
             throw new IllegalArgumentException();
         }
-        synchronized(this) {
+        w.lock();
+        try {
             while (! getEntry(elem).contains(elem)) {
                 try {
-                    wait();
+                    wait_for_elem.await();
                 }
                 catch(InterruptedException e) {
                     // Ignore interrupts
                 }
             }
+        } finally {
+            w.unlock();
         }
     }
 
     @Override
     public void rehash() {
-        synchronized (this) {
+        w.lock();
+        try {
             LinkedList<E>[] oldTable = table;
             table = createTable(2 * oldTable.length);
             for (LinkedList<E> list : oldTable) {
@@ -118,6 +141,8 @@ public class HSet2<E> implements IHSet<E>{
                     getEntry(elem).add(elem);
                 }
             }
+        } finally {
+            w.unlock();
         }
     }
 }
