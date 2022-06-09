@@ -3,8 +3,12 @@
 \usepackage[utf8]{inputenc}
 \usepackage[portuguese]{babel}
 \usepackage{tikz}
+\usepackage{titlesec}
 
-\title{Trabalho nº 2 de Programação Concorrente:\\Tabelas de dispersão}
+\titleformat{\chapter}{}{}{0em}{\bf\Huge}
+\setcounter{secnumdepth}{0}
+
+\title{Trabalho 2 de Programação Concorrente:\\Tabelas de dispersão}
 \author{Murilo Rosa (up201900689)\\Nazar Berbeka (up201907148)}
 \date{Junho 2022}
 
@@ -15,10 +19,10 @@
 
 \newpage
 
-\section{Introdução}
+\chapter{Introdução}
 O objetivo deste trabalho prático é desenvolver quatro implementações concorrentes de tabelas de dispersão em Java, utilizando diferentes mecanismos para sincronização de acessos aos mesmos. A implementação de tabelas de dispersão usa um array de listas ligadas para guardar os elementos e o hash code do elemento para calcular em que lista este será inserido. Neste relatório são descritas as quatro implementações.
 
-\section{Implementação}
+\chapter{Implementação}
 As implementações das tabelas são baseadas numa classes já fornecida \texttt{HSet0} e contém as seguintes funções:
 
 \begin{itemize}
@@ -30,23 +34,23 @@ As implementações das tabelas são baseadas numa classes já fornecida \texttt
 \item \texttt{rehash} - redimensiona a tabela.
 \end{itemize}
 
-\subsection{HSet1}
+\section{HSet1}
 Esta implementação usa \texttt{ReentrantLock} e condições (\texttt{Condition}) para sincronização de acessos a tabela em vezes dos blocos \texttt{synchronized}. A implementação desta classe é idêntica ao do \texttt{HSet0}, mas com todos os blocos \texttt{synchronized (this)} substituídos por blocos \texttt{try}/\texttt{finally}: a aquisição do lock ocorre antes do bloco \texttt{try} e a sua libertação ocorre no bloco \texttt{finally}. Uma outra diferença na implementação é nas funções \texttt{waitFor} e \texttt{add}: as instruções \texttt{wait()} e \texttt{notifyAll()} foram substituídas por uma condição \texttt{wait\_for\_elem}. A função \texttt{add} notifica todos os threads quando o elemento é adicionado ao conjunto, enquanto \texttt{waitFor} espera enquanto este elemento não estiver na tabela.
 
-\subsection{HSet2}
-Tal como \texttt{HSet1}, esta implementação usa \texttt{ReentrantLock} e condições. mas já usando locks de escrita e leitura separados.
+\section{HSet2}
+    Tal como \texttt{HSet1}, esta implementação usa a classe \texttt{ReentrantReadWriteLock}, que é similar a \texttt{ReentrantLock} mas com `locks' de leitura (\texttt{ReadLock}) e escrita (\texttt{WriteLock}) separados. No caso da condição nas funções \texttt{add} e \texttt{waitFor} continuamos a usar \texttt{Condition}, que são compatíveis com \texttt{WriteLock}. A vantagem nessa implementação deve-se ao fato de permitirmos múltiplos acessos paralelos nos `locks' de leitura. Por isso, usamos o `lock' de escrita apenas onde necessário, nomeadamente em \texttt{add}, \texttt{remove}, \texttt{waitFor} e \texttt{rehash}. Para além disso, seguimos o mesmo padrão de adquirir o `lock' e processar os dados dentro de um bloco \texttt{try/catch}.
 
-\subsection{HSet3}
-Esta implementação usa locks separados para cada lista ligada, possibilitando assim um acesso concorrente mais rápido à tabela.
+\section{HSet3}
+Para esta implementação usamos também \texttt{ReentrantReadWriteLock}, entretanto aproveitamos o fato de usarmos um array de listas ligadas para termos `locks' de leitura e escrita separados por lista ligada. Inicialmente temos um \texttt{ReentrantReadWriteLock} associado a cada lista ligada, e em caso de \texttt{rehash}, associamos a um conjunto de listas ligadas. Assim, usamos o mesmo padrão de blocos \texttt{try/catch}, exceto pelo fato de que precisamos obter apenas o `lock' associado a devida lista ligada e operação. No caso das condições usadas em \texttt{add} e \texttt{waitFor}, teremos uma condição (\texttt{Condition}) associada a cada \texttt{ReentrantReadWriteLock}. Apenas nas funções de \texttt{rehash} e \texttt{size}, precisamos obter todos os `locks' de escrita e leitura, respetivamente.
 
-\subsection{HSet4}
-Por fim, esta ultima implementação usa biblioteca scalaSTM e exige manipulação manual dos nós nas listas ligadas. Por isso, a tabela contém um array de nós, em que cada nó contém apontador para o próximo nó e para o nó anterior. Para um adição/remoção de elementos mais simples, todos as listas ligadas são inicializadas com dois nós sentinelas tal como ilustrado na figura \ref{sentinels}: o primeiro nó aponta para o último; o último aponto para o primeiro. Desta forma, todos as adições/remoções vão ocorrer entre estes dois elementos.
+\section{HSet4}
+Por fim, esta ultima implementação usa biblioteca scalaSTM e exige manipulação manual dos nós nas listas ligadas. Por isso, a tabela contém um array de nós, em que cada nó contém apontado para o próximo nó e para o nó anterior. Para um adição/remoção de elementos mais simples, todos as listas ligadas são inicializadas com dois nós sentinelas, tal como ilustrado na figura \ref{sentinels}: o primeiro nó aponta para o último; o último aponto para o primeiro. Desta forma, todos as adições/remoções vão ocorrer entre estes dois nós. Para distinguir os nós sentinelas de nós internos, o campo \texttt{value} do nó sentinela é \texttt{null}, desta forma é mais fácil testar se o nó é último da lista (\texttt{node.value != null} em vez de \texttt{node.next.get() != null}).
 
 \begin{figure}[!h]
   \centering
   \begin{tikzpicture}
-    \node[shape=circle,draw=black] (First) at (0,0) {First};
-    \node[shape=circle,draw=black] (Last) at (3,0) {Last};
+    \node[shape=rectangle,draw=black] (First) at (0,0) {First};
+    \node[shape=rectangle,draw=black] (Last) at (3,0) {Last};
 
     \path [->](First) edge[bend left] node {} (Last);
     \path [->](Last) edge[bend left] node {} (First);
@@ -55,7 +59,10 @@ Por fim, esta ultima implementação usa biblioteca scalaSTM e exige manipulaç�
   \label{sentinels}
 \end{figure}
 
-\section{Conclusão}
-Neste trabalho conseguimos com sucesso implementar as quatro tabelas de dispersão com toda a funcionalidade pedida.
+De resto, a implementação desta classe é semelhante à classe \texttt{HSet0}, com blocos \texttt{synchronized} substituídos por \texttt{STM.atomic()} e com manipulação manual de nós. Os comandos \texttt{singalAll()} e \texttt{wait()} nas funções \texttt{add} e \texttt{waitFor}, respetivamente, foram removidos, pois os threads são automaticamente sincronizados por STM. A classe também contém funções auxiliares para inicializar as sentinelas (\texttt{set\_sentinels}), adicionar o elemento no inicio da lista sem verificar se ele está contida na tabela e sem incrementar o tamanho (\texttt{add\_no\_check}) e para receber o primeiro nó da lista em que o elemento deve ser colocado (\texttt{get}). Quando a tabela é redimensionada, criamos um novo array com o dobro do tamanho e substituímos o array corrente por novo array, guardando a referencia para o array velho. De seguida, os nós sentinelas são inicializados e os elementos do array velho são adicionados ao array novo.
+
+\chapter{Conclusão}
+Nesse trabalho conseguimos implementar as quatro tabelas de dispersão com todas as funcionalidades pedidas, com todas elas passando com sucesso os teste dados como medida.
 
 \end{document}
+
